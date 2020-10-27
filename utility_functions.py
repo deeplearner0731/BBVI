@@ -1,5 +1,19 @@
+import time
 import numpy as np 
+from derivative import derivative_mean, derivative_rho
+from data import load_data
+from sklearn.preprocessing import scale 
 
+def initialization(c,nodes):
+    global X,Y,X_test,Y_test
+    global kn,p
+    X, Y, X_test, Y_test = load_data(seed=0,state=c)
+    X_til=np.concatenate((X,X_test))
+    X_til=scale(X_til,with_mean=True,with_std=True)
+    X=X_til[0:X.shape[0],:]
+    X_test=X_til[X.shape[0]:X.shape[0]+X_test.shape[0],:]
+    kn=nodes
+    p=X.shape[1]
 
 def gaussian_distribution(x,mu,rho):
     sigma=np.log(1+np.exp(rho))
@@ -22,7 +36,7 @@ def q_simulate(no_sample,vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho):
 
 
 def log_p_q(Beta,Gamma,Vr_beta_mean,Vr_beta_rho,Vr_gamma_mean,Vr_gamma_rho):
-    z=np.array(list(map(lambda x:data_(X,Y,Beta[:,x],Gamma[:,:,x]),range(Beta.shape[1]))))
+    z=np.array(list(map(lambda x:lik_hood(X,Y,Beta[:,x],Gamma[:,:,x]),range(Beta.shape[1]))))
     B1=(np.log(gaussian_distribution(Beta,Vr_beta_mean,Vr_beta_rho))).T
     b1=np.sum(B1,1)
     B2=(np.log(gaussian_distribution(Beta,0,np.log(1+np.exp(1))))).T
@@ -120,3 +134,86 @@ def sample(type_,no_sample,lr,fix,vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamm
 
     
     return np.mean(L),vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho, Beta, Gamma, A,B,C,D
+
+
+def training(combination,tol_diff,tol_chain,itera,cc):
+    para={}
+    control_theta=False
+    parameter=['beta','gamma','all']
+    for j in combination:
+        print('case: %s_%s_%s'%(j[1],j[0],j[2]))
+        
+        c=cc
+        nodes=10
+        epoch=itera
+        lr=0.001
+        initialization(c,nodes)
+        vr_beta_mean=np.zeros(((kn+1),))
+        vr_gamma_mean=np.zeros((kn,(p+1)))
+        vr_beta_rho=np.ones(((kn+1),))
+        vr_gamma_rho=np.ones((kn,(p+1)))
+        
+        
+        chain_len=0
+        chain_val=0
+        AL,CA1,CA2=[],[],[]
+        
+        
+
+        for k in parameter:
+            para['average_%s_%s_%s_%s'%(k,j[1],j[0],j[2])]=np.zeros((epoch,))
+            para['average_%s_derivative_%s_%s_%s'%(k,j[1],j[0],j[2])]=np.zeros((epoch,))
+
+
+        t0=time.time()
+        for step in range(epoch):
+            if j[2]=='fix':
+                al,vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho,beta_,gamma_,A,B,C,D=sample(j[1],int(j[0]),lr,j[2],vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho)
+            else:
+                al,vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho,beta_,gamma_,A,B,C,D=sample(j[1],int(j[0]),step,j[2],vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho)
+
+            para['average_beta_%s_%s_%s'%(j[1],j[0],j[2])][step]=np.mean(np.std(beta_,axis=1))
+            para['average_gamma_%s_%s_%s'%(j[1],j[0],j[2])][step]=np.mean(np.std(gamma_.reshape(-1,int(j[0])),axis=1))
+            all_=np.concatenate((gamma_.reshape(-1,int(j[0])),beta_),axis=0)
+            para['average_all_%s_%s_%s'%(j[1],j[0],j[2])][step]=np.mean(np.std(all_,axis=1))
+
+
+            para['average_beta_derivative_%s_%s_%s'%(j[1],j[0],j[2])][step]=np.mean(np.std(A,axis=1))
+            para['average_gamma_derivative_%s_%s_%s'%(j[1],j[0],j[2])][step]=np.mean(np.std(C.reshape(-1,int(j[0])),axis=1))
+            all_=np.concatenate((C.reshape(-1,int(j[0])),A),axis=0)
+            para['average_all_derivative_%s_%s_%s'%(j[1],j[0],j[2])][step]=np.mean(np.std(all_,axis=1))
+            
+            ca1=train_accuracy(False,vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho)
+            ca2=test_accuracy(False,vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho)
+    
+
+            AL=np.append(AL,al)
+            CA1=np.append(CA1,ca1)
+            CA2=np.append(CA2,ca2)
+
+            if (int(abs(AL[step]))==chain_val):
+                chain_len=chain_len+1
+            else:
+                chain_val=int(abs(AL[step]))
+                chain_len=0
+
+            if (step<1):
+                diff=abs(AL[step])
+            else:
+                diff=abs(AL[step]-AL[(step-1)]) 
+   
+            if ( chain_len>tol_chain): 
+                break  
+
+            if ((step+1)%1000==0):
+                print(step,al,diff,ca1,ca2)
+        tn=time.time()-t0
+        para['time_%s_%s_%s'%(j[1],j[0],j[2])]=tn
+        para['AL_%s_%s_%s'%(j[1],j[0],j[2])]=AL
+        para['Testing_%s_%s_%s'%(j[1],j[0],j[2])]=CA2
+        
+        
+        
+
+    return para
+
