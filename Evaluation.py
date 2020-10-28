@@ -1,5 +1,16 @@
 import numpy as np
 
+def q_simulate(no_sample,vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho):
+    Beta=np.zeros(((kn+1),no_sample))
+    for i in range((kn+1)):
+        Beta[i,:]=np.random.normal(vr_beta_mean[i], np.log(1+np.exp(vr_beta_rho[i])), no_sample)
+    Gamma=np.zeros((kn,(p+1),no_sample))
+    for i in range(kn):
+        for j in range((p+1)):
+             Gamma[i,j,:]=np.random.normal(vr_gamma_mean[i][j], np.log(1+np.exp(vr_gamma_rho[i][j])), no_sample)    
+    return Beta,Gamma
+
+
 def train_accuracy(theta_var,vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho):
     Beta,Gamma=q_simulate(10000,vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho)
     beta=np.apply_along_axis(np.mean, 1, Beta)

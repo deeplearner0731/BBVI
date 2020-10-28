@@ -7,7 +7,7 @@ def load_data(seed=0,state=32):
     
     npr.seed(seed)
     
-    data = np.load("./data/new_data.npz")
+    data = np.load("./data/new_data1D.npz")
     #data = np.load("./data/moon_data.npz")
     x = data['x']
     y = data['y']

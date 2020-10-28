@@ -3,6 +3,57 @@ import numpy as np
 from derivative import derivative_mean, derivative_rho
 from data import load_data
 from sklearn.preprocessing import scale 
+from matplotlib import pyplot as plt
+
+
+
+
+def train_accuracy(theta_var,vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho):
+    Beta,Gamma=q_simulate(10000,vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho)
+    beta=np.apply_along_axis(np.mean, 1, Beta)
+    gamma=np.apply_along_axis(np.mean, 2, Gamma)
+    n=X.shape[0]
+    X1=np.column_stack((np.ones(n),X))
+    V1=np.dot(gamma,X1.T)
+    V2=1.0/(1+np.exp(-V1))
+    theta=beta[0]+np.dot(beta[1::].reshape(1,kn),V2)
+    if theta_var==True:
+        var_theta=np.std(theta,axis=1)
+    
+        Y_est=np.array([0 if x<0.5 else 1 for x in 1.0/(1+np.exp(-theta.T))])
+        Y_est=Y_est.reshape((len(Y_est),))
+        acc=sum(Y==Y_est)*1.0/len(Y)
+        return acc,var_theta
+    else:
+        Y_est=np.array([0 if x<0.5 else 1 for x in 1.0/(1+np.exp(-theta.T))])
+        Y_est=Y_est.reshape((len(Y_est),))
+        acc=sum(Y==Y_est)*1.0/len(Y)
+        return acc
+
+
+        
+
+def test_accuracy(theta_var,vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho):
+    Beta,Gamma=q_simulate(10000,vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho)
+    beta=np.apply_along_axis(np.mean, 1, Beta)
+    gamma=np.apply_along_axis(np.mean, 2, Gamma)
+    n=X_test.shape[0]
+    X1=np.column_stack((np.ones(n),X_test))
+    V1=np.dot(gamma,X1.T)
+    V2=1.0/(1+np.exp(-V1))
+    theta=beta[0]+np.dot(beta[1::].reshape(1,kn),V2)
+    if theta_var==True:
+        var_theta=np.std(theta,axis=1)
+        Y_est=np.array([0 if x<0.5 else 1 for x in 1.0/(1+np.exp(-theta.T))])
+        Y_est=Y_est.reshape((len(Y_est),))
+        acc=sum(Y_test==Y_est)*1.0/len(Y_test)
+        return acc, var_theta
+    else:
+        Y_est=np.array([0 if x<0.5 else 1 for x in 1.0/(1+np.exp(-theta.T))])
+        Y_est=Y_est.reshape((len(Y_est),))
+        acc=sum(Y_test==Y_est)*1.0/len(Y_test)
+        return acc
+
 
 def initialization(c,nodes):
     global X,Y,X_test,Y_test
@@ -57,6 +108,8 @@ def lik_hood(x,y,beta,gamma):
     val2=1.0/(1+np.exp(-val1))
     theta=beta[0]+np.dot(beta[1::].reshape(1,kn),val2)
     return np.sum(y*theta-np.log(1+np.exp(theta)))
+
+
 
 
 
@@ -136,7 +189,7 @@ def sample(type_,no_sample,lr,fix,vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamm
     return np.mean(L),vr_beta_mean,vr_beta_rho,vr_gamma_mean,vr_gamma_rho, Beta, Gamma, A,B,C,D
 
 
-def training(combination,tol_diff,tol_chain,itera,cc):
+def training(combination,tol_diff,tol_chain,itera,cc,num_nodes,fix_learning_rate):
     para={}
     control_theta=False
     parameter=['beta','gamma','all']
@@ -144,9 +197,9 @@ def training(combination,tol_diff,tol_chain,itera,cc):
         print('case: %s_%s_%s'%(j[1],j[0],j[2]))
         
         c=cc
-        nodes=10
+        nodes=num_nodes
         epoch=itera
-        lr=0.001
+        lr=fix_learning_rate
         initialization(c,nodes)
         vr_beta_mean=np.zeros(((kn+1),))
         vr_gamma_mean=np.zeros((kn,(p+1)))
@@ -209,11 +262,31 @@ def training(combination,tol_diff,tol_chain,itera,cc):
                 print(step,al,diff,ca1,ca2)
         tn=time.time()-t0
         para['time_%s_%s_%s'%(j[1],j[0],j[2])]=tn
-        para['AL_%s_%s_%s'%(j[1],j[0],j[2])]=AL
+        para['ELBO_%s_%s_%s'%(j[1],j[0],j[2])]=AL
         para['Testing_%s_%s_%s'%(j[1],j[0],j[2])]=CA2
+        para['Traning_%s_%s_%s'%(j[1],j[0],j[2])]=CA1
         
         
         
 
     return para
+
+
+
+def plot_elbo(elbo):
+
+    params = {'legend.fontsize': 'x-large',
+              'figure.figsize': (10, 10),
+             'axes.labelsize': 'x-large',
+             'axes.titlesize':'x-large',
+             'xtick.labelsize':'x-large',
+             'ytick.labelsize':'x-large'}
+    plt.rcParams.update(params)
+
+    plt.plot(elbo,linewidth=5.0)
+    plt.title('ELBO')
+    plt.xlabel('Iteration')
+    plt.ylabel('ELBO')
+    plt.legend()
+    plt.show()
 
